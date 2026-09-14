@@ -104,16 +104,21 @@ public partial class MainWindow : Window
         try
         {
             var document = XDocument.Load(dialog.FileName);
-            var gpxPoints = document.Descendants()
-                .Where(x => x.Name.LocalName is "trkpt" or "rtept" or "wpt")
-                .Select((x, i) => new RoutePoint
-                {
-                    Name = ChildValue(x, "name") ?? $"Punt {i + 1}",
-                    Latitude = ParseDouble(x.Attribute("lat")?.Value),
-                    Longitude = ParseDouble(x.Attribute("lon")?.Value),
-                    Elevation = ParseDouble(ChildValue(x, "ele")),
-                    IsStation = x.Name.LocalName == "wpt"
-                }).ToList();
+            var routeElements = document.Descendants()
+                .Where(x => x.Name.LocalName is "trkpt" or "rtept")
+                .ToList();
+            if (routeElements.Count == 0)
+                routeElements = document.Descendants().Where(x => x.Name.LocalName == "wpt").ToList();
+
+            var gpxPoints = routeElements.Select((x, i) => new RoutePoint
+            {
+                Name = ChildValue(x, "name") ?? $"Punt {i + 1}",
+                Latitude = ParseRequiredCoordinate(x.Attribute("lat")?.Value, "breedtegraad", i + 1, -90, 90),
+                Longitude = ParseRequiredCoordinate(x.Attribute("lon")?.Value, "lengtegraad", i + 1, -180, 180),
+                Elevation = ParseDouble(ChildValue(x, "ele")),
+                IsStation = x.Name.LocalName == "wpt" ||
+                            x.Descendants().Any(d => d.Value.Contains("station", StringComparison.OrdinalIgnoreCase))
+            }).ToList();
 
             ReplacePoints(gpxPoints);
             StatusText.Text = $"{gpxPoints.Count} GPX-punten geïmporteerd";
@@ -135,24 +140,29 @@ public partial class MainWindow : Window
                 .Where(line => !string.IsNullOrWhiteSpace(line)).ToList();
             if (lines.Count == 0) throw new InvalidDataException("Het CSV-bestand is leeg.");
 
-            var separator = lines[0].Count(c => c == ';') > lines[0].Count(c => c == ',') ? ';' : ',';
-            var start = lines[0].Contains("latitude", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+            var separator = CountSeparatorOutsideQuotes(lines[0], ';') > CountSeparatorOutsideQuotes(lines[0], ',') ? ';' : ',';
+            var firstCells = ParseCsvLine(lines[0], separator);
+            var start = firstCells.Any(c => c.Equals("latitude", StringComparison.OrdinalIgnoreCase)) ? 1 : 0;
             var imported = new List<RoutePoint>();
 
             for (var i = start; i < lines.Count; i++)
             {
-                var cells = lines[i].Split(separator);
-                if (cells.Length < 4) continue;
+                var cells = ParseCsvLine(lines[i], separator);
+                if (cells.Count < 4)
+                    throw new InvalidDataException($"CSV-regel {i + 1} bevat minder dan vier velden.");
+
                 imported.Add(new RoutePoint
                 {
                     Name = cells[0].Trim(),
-                    Latitude = ParseDouble(cells[1]),
-                    Longitude = ParseDouble(cells[2]),
+                    Latitude = ParseRequiredCoordinate(cells[1], "breedtegraad", i + 1, -90, 90),
+                    Longitude = ParseRequiredCoordinate(cells[2], "lengtegraad", i + 1, -180, 180),
                     Elevation = ParseDouble(cells[3]),
-                    IsStation = cells.Length > 4 && bool.TryParse(cells[4].Trim(), out var station) && station
+                    IsStation = cells.Count > 4 && bool.TryParse(cells[4].Trim(), out var station) && station
                 });
             }
 
+            if (imported.Count < 2)
+                throw new InvalidDataException("Het CSV-bestand moet minimaal twee geldige routepunten bevatten.");
             ReplacePoints(imported);
             StatusText.Text = $"{imported.Count} CSV-punten geïmporteerd";
         }
@@ -198,8 +208,8 @@ public partial class MainWindow : Window
             };
 
             var stationIndex = (int)Math.Round(t * (stationCount - 1));
-            var stationT = stationIndex / (double)(stationCount - 1);
-            var isStation = Math.Abs(t - stationT) < 0.5 / sampleCount;
+            var stationPointIndex = (int)Math.Round(stationIndex * (sampleCount - 1.0) / (stationCount - 1));
+            var isStation = i == stationPointIndex;
 
             generated.Add(new RoutePoint
             {
@@ -224,6 +234,21 @@ public partial class MainWindow : Window
         var messages = new List<ValidationMessage>();
         if (_points.Count < 2)
             messages.Add(new("FOUT", "De route heeft minimaal twee punten nodig."));
+
+        for (var i = 0; i < _points.Count; i++)
+        {
+            var p = _points[i];
+            if (!double.IsFinite(p.Latitude) || p.Latitude is < -90 or > 90 ||
+                !double.IsFinite(p.Longitude) || p.Longitude is < -180 or > 180)
+                messages.Add(new("FOUT", $"Punt {i + 1} bevat ongeldige geografische coördinaten."));
+            if (!double.IsFinite(p.Elevation))
+                messages.Add(new("FOUT", $"Punt {i + 1} bevat een ongeldige hoogte."));
+        }
+
+        if (_project.MaxGradientPermille <= 0)
+            messages.Add(new("FOUT", "De maximale helling moet groter zijn dan nul."));
+        if (_project.MinimumRadiusMeters <= 0)
+            messages.Add(new("FOUT", "De minimumboogstraal moet groter zijn dan nul."));
 
         for (var i = 1; i < _points.Count; i++)
         {
@@ -361,7 +386,7 @@ if ($LASTEXITCODE -ne 0) { throw "Serz.exe eindigde met foutcode $LASTEXITCODE" 
         var item = TrackTypeBox.Items.Cast<ComboBoxItem>()
             .FirstOrDefault(x => x.Content?.ToString() == project.TrackType);
         TrackTypeBox.SelectedItem = item ?? TrackTypeBox.Items[0];
-        ReplacePoints(project.Points);
+        ReplacePoints(project.Points ?? []);
     }
 
     private void ReadSettings()
@@ -493,6 +518,64 @@ if ($LASTEXITCODE -ne 0) { throw "Serz.exe eindigde met foutcode $LASTEXITCODE" 
     private static double ParseDouble(string? value) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? result :
         double.TryParse(value, NumberStyles.Float, CultureInfo.CurrentCulture, out result) ? result : 0;
+
+    private static double ParseRequiredCoordinate(string? value, string field, int row, double minimum, double maximum)
+    {
+        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result) &&
+            !double.TryParse(value, NumberStyles.Float, CultureInfo.CurrentCulture, out result))
+            throw new InvalidDataException($"Ongeldige {field} op regel/punt {row}.");
+
+        if (!double.IsFinite(result) || result < minimum || result > maximum)
+            throw new InvalidDataException($"{field} buiten bereik op regel/punt {row}.");
+        return result;
+    }
+
+    private static int CountSeparatorOutsideQuotes(string line, char separator)
+    {
+        var quoted = false;
+        var count = 0;
+        for (var i = 0; i < line.Length; i++)
+        {
+            if (line[i] == '"')
+            {
+                if (quoted && i + 1 < line.Length && line[i + 1] == '"') i++;
+                else quoted = !quoted;
+            }
+            else if (!quoted && line[i] == separator) count++;
+        }
+        return count;
+    }
+
+    private static List<string> ParseCsvLine(string line, char separator)
+    {
+        var result = new List<string>();
+        var cell = new StringBuilder();
+        var quoted = false;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            var ch = line[i];
+            if (ch == '"')
+            {
+                if (quoted && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    cell.Append('"');
+                    i++;
+                }
+                else quoted = !quoted;
+            }
+            else if (ch == separator && !quoted)
+            {
+                result.Add(cell.ToString());
+                cell.Clear();
+            }
+            else cell.Append(ch);
+        }
+
+        if (quoted) throw new InvalidDataException("CSV-regel bevat een niet afgesloten aanhalingsteken.");
+        result.Add(cell.ToString());
+        return result;
+    }
 
     private static string F(double value) => value.ToString("0.########", CultureInfo.InvariantCulture);
     private static string Csv(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
