@@ -1,0 +1,122 @@
+<Window x:Class="TscRouteGenerator.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TSC Route Generator" Height="820" Width="1280"
+        MinHeight="680" MinWidth="1040" Background="#0E1620" Foreground="White">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="#111D29" Padding="14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="TSC ROUTE GENERATOR" FontSize="23" FontWeight="Bold" Foreground="#F3B33D"/>
+                    <TextBlock Text="Ontwerp echte en fictieve routes voor Train Simulator Classic" Foreground="#AFC1D2"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Click="New_Click">Nieuw</Button>
+                    <Button Click="Open_Click">Openen</Button>
+                    <Button Click="Save_Click">Opslaan</Button>
+                    <Button Click="Export_Click" Background="#B67A12">TSC-export</Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <StatusBar DockPanel.Dock="Bottom" Background="#111D29" Foreground="#DDE8F0">
+            <StatusBarItem><TextBlock x:Name="StatusText" Text="Gereed"/></StatusBarItem>
+            <Separator/>
+            <StatusBarItem><TextBlock x:Name="SummaryText"/></StatusBarItem>
+        </StatusBar>
+
+        <Grid Margin="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="310"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="340"/>
+            </Grid.ColumnDefinitions>
+
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <GroupBox Header="Routeproject" Background="#182331" Foreground="White" Margin="0,0,8,8" Padding="8">
+                        <StackPanel>
+                            <TextBlock Text="Naam"/>
+                            <TextBox x:Name="NameBox" TextChanged="SettingsChanged"/>
+                            <TextBlock Text="Beschrijving"/>
+                            <TextBox x:Name="DescriptionBox" Height="60" AcceptsReturn="True" TextWrapping="Wrap" TextChanged="SettingsChanged"/>
+                            <TextBlock Text="Spoortype"/>
+                            <ComboBox x:Name="TrackTypeBox" SelectionChanged="SettingsChanged">
+                                <ComboBoxItem Content="Geëlektrificeerd dubbelspoor"/>
+                                <ComboBoxItem Content="Geëlektrificeerd enkelspoor"/>
+                                <ComboBoxItem Content="Niet-geëlektrificeerd dubbelspoor"/>
+                                <ComboBoxItem Content="Niet-geëlektrificeerd enkelspoor"/>
+                            </ComboBox>
+                            <TextBlock Text="Max. helling (‰)"/>
+                            <TextBox x:Name="GradientBox" TextChanged="SettingsChanged"/>
+                            <TextBlock Text="Minimumboogstraal (m)"/>
+                            <TextBox x:Name="RadiusBox" TextChanged="SettingsChanged"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="Echte route" Background="#182331" Foreground="White" Margin="0,0,8,8" Padding="8">
+                        <StackPanel>
+                            <Button Click="ImportGpx_Click">GPX-bestand importeren</Button>
+                            <Button Click="ImportCsv_Click">CSV-bestand importeren</Button>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="Fictieve generator" Background="#182331" Foreground="White" Margin="0,0,8,8" Padding="8">
+                        <StackPanel>
+                            <TextBlock Text="Lengte (km)"/>
+                            <TextBox x:Name="LengthBox" Text="25"/>
+                            <TextBlock Text="Aantal stations"/>
+                            <TextBox x:Name="StationsBox" Text="6"/>
+                            <TextBlock Text="Landschap"/>
+                            <ComboBox x:Name="LandscapeBox" SelectedIndex="0">
+                                <ComboBoxItem Content="Nederlands vlakland"/>
+                                <ComboBoxItem Content="Heuvelland"/>
+                                <ComboBoxItem Content="Stedelijk"/>
+                                <ComboBoxItem Content="Kustgebied"/>
+                            </ComboBox>
+                            <Button Click="Generate_Click" Background="#2D714A">Genereer route</Button>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <Button Click="Validate_Click">Route controleren</Button>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Border Grid.Column="1" Background="#0A1118" BorderBrush="#2D4255" BorderThickness="1" Margin="0,0,8,0">
+                <Grid>
+                    <Canvas x:Name="RouteCanvas" Background="#0A1118" SizeChanged="RouteCanvas_SizeChanged"/>
+                    <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12" Padding="8"
+                            Background="#CC182331" CornerRadius="4">
+                        <TextBlock Text="ROUTEPREVIEW • stations geel • spoor cyaan" Foreground="#C7D7E5"/>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="220"/>
+                </Grid.RowDefinitions>
+                <GroupBox Header="Routepunten en stations" Background="#182331" Foreground="White" Padding="7">
+                    <DataGrid x:Name="PointsGrid" AutoGenerateColumns="False" CanUserAddRows="True"
+                              CellEditEnding="PointsGrid_CellEditEnding" Background="#F5F7FA" Foreground="#111">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Naam" Binding="{Binding Name}" Width="*"/>
+                            <DataGridTextColumn Header="Lat." Binding="{Binding Latitude, StringFormat=F6}" Width="75"/>
+                            <DataGridTextColumn Header="Lon." Binding="{Binding Longitude, StringFormat=F6}" Width="75"/>
+                            <DataGridTextColumn Header="Hoogte" Binding="{Binding Elevation, StringFormat=F1}" Width="65"/>
+                            <DataGridCheckBoxColumn Header="Station" Binding="{Binding IsStation}" Width="55"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </GroupBox>
+                <GroupBox Grid.Row="1" Header="Controle" Background="#182331" Foreground="White" Padding="7" Margin="0,8,0,0">
+                    <ListBox x:Name="ValidationList" Background="#101A24" Foreground="#DDE8F0"/>
+                </GroupBox>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>
