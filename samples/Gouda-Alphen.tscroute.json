@@ -1,0 +1,13 @@
+{
+  "Name": "Voorbeeld Gouda - Alphen",
+  "Description": "Kleine voorbeeldroute om de editor te testen.",
+  "TrackType": "Geëlektrificeerd enkelspoor",
+  "MaxGradientPermille": 25,
+  "MinimumRadiusMeters": 250,
+  "Points": [
+    { "Name": "Gouda", "Latitude": 52.017, "Longitude": 4.7055, "Elevation": 1, "IsStation": true },
+    { "Name": "Waddinxveen", "Latitude": 52.0452, "Longitude": 4.6517, "Elevation": -1, "IsStation": true },
+    { "Name": "Boskoop", "Latitude": 52.075, "Longitude": 4.646, "Elevation": -2, "IsStation": true },
+    { "Name": "Alphen aan den Rijn", "Latitude": 52.1242, "Longitude": 4.6572, "Elevation": 0, "IsStation": true }
+  ]
+}
