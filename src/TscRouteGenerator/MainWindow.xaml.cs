@@ -189,7 +189,7 @@ public partial class MainWindow : Window
 
         var landscape = (LandscapeBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Nederlands vlakland";
         var random = new Random();
-        var sampleCount = Math.Max(60, (int)(lengthKm * 5));
+        var sampleCount = Math.Max(Math.Max(60, stationCount * 2), (int)(lengthKm * 5));
         const double startLat = 52.02;
         const double startLon = 4.70;
         var generated = new List<RoutePoint>();
